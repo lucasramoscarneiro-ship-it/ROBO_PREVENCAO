@@ -19,6 +19,7 @@ import painel_expiry_bot as painel
 # CONFIGURAÇÃO INICIAL
 # ===============================
 CFG_PATH = Path(__file__).resolve().parents[1] / "config.json"
+
 cfg = json.loads(Path(CFG_PATH).read_text(encoding="utf-8"))
 conn = get_conn(cfg["database_path"])
 init_db(conn)
@@ -45,6 +46,7 @@ def enviar_alertas_automaticos():
                 cfg_loja = json.loads(CFG_STORE_PATH.read_text(encoding="utf-8"))
             else:
                 cfg_loja = cfg.copy()
+                CFG_STORE_PATH.write_text(json.dumps(cfg_loja, indent=2, ensure_ascii=False), encoding="utf-8")
 
             alert_cfg = cfg_loja.get("alert_email", {})
             if not alert_cfg.get("enabled", False):
