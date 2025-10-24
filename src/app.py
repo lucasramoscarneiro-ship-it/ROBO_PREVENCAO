@@ -19,6 +19,9 @@ import painel_expiry_bot as painel
 # CONFIGURAÇÃO INICIAL
 # ===============================
 CFG_PATH = Path(__file__).resolve().parents[1] / "config.json"
+if not CFG_PATH.exists():
+    st.error(f"❌ Arquivo de configuração não encontrado: {CFG_PATH}")
+    st.stop()
 
 cfg = json.loads(Path(CFG_PATH).read_text(encoding="utf-8"))
 conn = get_conn(cfg["database_path"])
