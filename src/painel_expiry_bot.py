@@ -604,9 +604,24 @@ def main(conn, cfg, user):
             st.subheader("⚙️ Parâmetros do Sistema (Administrador)")
 
             lojas = conn.execute("SELECT id, name FROM stores").fetchall()
+
+            # ✅ Verifica se há lojas cadastradas
+            if not lojas:
+                st.warning("⚠️ Nenhuma loja cadastrada ainda. Crie uma loja primeiro na aba 'Gestão de Usuários'.")
+                st.stop()
+
             loja_opcoes = {f"{s[1]} (ID {s[0]})": s[0] for s in lojas}
             loja_sel = st.selectbox("Selecione a loja para configurar", options=list(loja_opcoes.keys()))
-            loja_id = loja_opcoes[loja_sel]
+
+            # ✅ Verifica se o usuário selecionou algo válido
+            if not loja_sel:
+                st.info("Selecione uma loja para continuar.")
+                st.stop()
+
+            loja_id = loja_opcoes.get(loja_sel)
+            if loja_id is None:
+                st.error("Erro: loja selecionada não encontrada. Recarregue a página.")
+                st.stop()
 
             CFG_STORE_PATH = Path(__file__).resolve().parents[1] / f"config_loja_{loja_id}.json"
 
