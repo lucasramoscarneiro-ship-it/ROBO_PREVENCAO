@@ -1,3 +1,7 @@
+# ==========================================
+# 🔧 REGRAS GITIGNORE - PROJETO CONTROLE LRC
+# ==========================================
+
 # Arquivos temporários e cache
 __pycache__/
 *.pyc
@@ -11,23 +15,21 @@ venv/
 env/
 
 # Dados locais e relatórios (exceto o banco oficial)
-# ⚠️ NÃO ignore a pasta data nem o arquivo expirybot.db
-#data/
+# ⚠️ Mantemos apenas o banco oficial expirybot.db
+#    para permitir deploy funcional no Streamlit Cloud
 *.sqlite
 *.xlsx
 *.csv
 *.zip
 *.pdf
 *.xml
-
-# Mantém o banco principal versionado
+*.json
+!config.json
 !data/
 !data/expirybot.db
 
 # Arquivos de configuração locais
 config_loja_*.json
-# ❗ Mantém o config.json porque é necessário no deploy
-!config.json
 
 # Arquivos de build e sistema
 .DS_Store

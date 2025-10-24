@@ -1,7 +1,8 @@
 import streamlit as st
 import streamlit_authenticator as stauth
-from db import get_user_by_username
+from db_supabase import get_conn, init_db, get_user_by_username  # <-- 🔥 adicionar aqui
 import bcrypt
+
 
 def login_box(conn):
     """Caixa de login com verificação de senha e retorno de dicionário completo do usuário."""
@@ -31,7 +32,7 @@ def login_box(conn):
                 "name": name,
                 "email": email,
                 "role": role,
-                "store_id": store_id
+                "store_id": store_id,
             }
             st.success(f"Bem-vindo, {name} 👋")
             st.rerun()

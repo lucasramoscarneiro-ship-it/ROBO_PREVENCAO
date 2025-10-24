@@ -1,6 +1,6 @@
 {
   "database_path": "data/expirybot.db",
-  "report_dir": "C:/Users/lucas/Downloads/ROBO_PREVENCAO/reports",
+  "report_dir": "data/reports",
   "near_expiry_days": 15,
   "alert_email": {
     "enabled": true,

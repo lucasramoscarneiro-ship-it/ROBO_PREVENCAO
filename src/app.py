@@ -8,7 +8,7 @@ import traceback
 import expiry_bot as bot
 from report_pdf import gerar_relatorio_pdf
 import pandas as pd
-from db import (
+from db_supabase import (
     get_conn, init_db, list_users, create_user,
     update_user_role, update_user_status, update_user_password
 )

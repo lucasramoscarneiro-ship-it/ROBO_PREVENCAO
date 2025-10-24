@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 from datetime import datetime, timedelta
 
-from db import get_conn, init_db
+from db_supabase import get_conn, init_db
 import reporting
 import expiry_bot as bot
 from report_pdf import gerar_relatorio_pdf
@@ -219,12 +219,22 @@ def main(conn, cfg, user):
                             expiry = None
 
                         cur = conn.cursor()
-                        cur.execute("INSERT OR IGNORE INTO products(ean, product_name) VALUES(?,?)", (ean, pname))
-                        cur.execute("UPDATE products SET product_name=COALESCE(NULLIF(?, ''), product_name) WHERE ean=?", (pname, ean))
+                        cur.execute(
+                            "INSERT INTO products(ean, product_name) VALUES(%s,%s) ON CONFLICT (ean) DO NOTHING",
+                            (ean, pname)
+                        )
+                        cur.execute("UPDATE products SET product_name=COALESCE(NULLIF(%s, ''), product_name) WHERE ean=%s", (pname, ean))
                         if expiry:
-                            cur.execute("INSERT OR IGNORE INTO lots(ean, lot, expiry_date) VALUES(?,?,?)", (ean, lot, expiry))
+                            cur.execute(
+                                "INSERT INTO lots(ean, lot, expiry_date) VALUES(%s,%s,%s) ON CONFLICT (ean, lot) DO NOTHING",
+                                (ean, lot, expiry)
+                            )
                         else:
-                            cur.execute("INSERT OR IGNORE INTO lots(ean, lot, expiry_date) VALUES(?,?,DATE('now', '+180 days'))", (ean, lot))
+                            cur.execute(
+                                "INSERT INTO lots(ean, lot, expiry_date) VALUES(%s,%s,CURRENT_DATE + INTERVAL '180 days') ON CONFLICT (ean, lot) DO NOTHING",
+                                (ean, lot)
+                            )
+
 
 
                     # 2️⃣ Faz um único commit no final da importação
@@ -265,16 +275,22 @@ def main(conn, cfg, user):
             try:
                 cur = conn.cursor()
                 # Garante que o produto exista
-                cur.execute("INSERT OR IGNORE INTO products(ean, product_name) VALUES(?, ?)", (ean_r, pname_r))
-                cur.execute("UPDATE products SET product_name = COALESCE(NULLIF(?, ''), product_name) WHERE ean = ?", (pname_r, ean_r))
+                cur.execute(
+                    "INSERT INTO products(ean, product_name) VALUES(%s, %s) ON CONFLICT (ean) DO NOTHING",
+                    (ean_r, pname_r)
+                )
+                cur.execute("UPDATE products SET product_name = COALESCE(NULLIF(%s, ''), product_name) WHERE ean = %s", (pname_r, ean_r))
 
                 # Garante que o lote exista
-                cur.execute("INSERT OR IGNORE INTO lots(ean, lot, expiry_date) VALUES(?,?,?)",
-                            (ean_r, lot_r, expiry_r.isoformat()))
+                cur.execute(
+                    "INSERT INTO lots(ean, lot, expiry_date) VALUES(%s,%s,%s) ON CONFLICT (ean, lot) DO NOTHING",
+                    (ean_r, lot_r, expiry_r.isoformat())
+                )
+
 
                 # Verifica se já existe item igual no estoque da mesma loja
                 cur.execute("""
-                    SELECT qty FROM stock WHERE ean=? AND lot=? AND store_id=?
+                    SELECT qty FROM stock WHERE ean=%s AND lot=%s AND store_id=%s
                 """, (ean_r, lot_r, store_id))
                 row = cur.fetchone()
 
@@ -283,15 +299,15 @@ def main(conn, cfg, user):
                     nova_qtd = row[0] + qty_r
                     cur.execute("""
                         UPDATE stock
-                        SET qty=?, location=?, updated_at=CURRENT_TIMESTAMP
-                        WHERE ean=? AND lot=? AND store_id=?
+                        SET qty=%s, location=%s, updated_at=CURRENT_TIMESTAMP
+                        WHERE ean=%s AND lot=%s AND store_id=%s
                     """, (nova_qtd, location_r, ean_r, lot_r, store_id))
                     st.info(f"Item já existia — quantidade atualizada para {nova_qtd}.")
                 else:
                     # Cria novo registro de estoque
                     cur.execute("""
                         INSERT INTO stock (ean, lot, qty, location, store_id)
-                        VALUES (?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s)
                     """, (ean_r, lot_r, qty_r, location_r, store_id))
                     st.success("Novo item de estoque criado com sucesso!")
 
@@ -420,7 +436,7 @@ def main(conn, cfg, user):
         )
     else:
         mov = pd.read_sql_query(
-            "SELECT * FROM movements WHERE store_id = ?",
+            "SELECT * FROM movements WHERE store_id = %s",
             conn,
             params=(store_id,),
             parse_dates=["ts"]
@@ -477,8 +493,8 @@ def main(conn, cfg, user):
             if colA.button("💾 Salvar Alterações"):
                 try:
                     cur = conn.cursor()
-                    cur.execute("UPDATE stock SET qty=?, location=? WHERE ean=? AND lot=?", (nova_qtd, novo_local, ean_sel, lot_sel))
-                    cur.execute("UPDATE lots SET expiry_date=? WHERE ean=? AND lot=?", (nova_data.isoformat(), ean_sel, lot_sel))
+                    cur.execute("UPDATE stock SET qty=%s, location=%s WHERE ean=%s AND lot=%s", (nova_qtd, novo_local, ean_sel, lot_sel))
+                    cur.execute("UPDATE lots SET expiry_date=%s WHERE ean=%s AND lot=%s", (nova_data.isoformat(), ean_sel, lot_sel))
                     conn.commit()
                     st.success("Item atualizado com sucesso!")
                 except Exception as e:
@@ -489,8 +505,8 @@ def main(conn, cfg, user):
                 if confirm:
                     try:
                         cur = conn.cursor()
-                        cur.execute("DELETE FROM stock WHERE ean=? AND lot=?", (ean_sel, lot_sel))
-                        cur.execute("DELETE FROM lots WHERE ean=? AND lot=?", (ean_sel, lot_sel))
+                        cur.execute("DELETE FROM stock WHERE ean=%s AND lot=%s", (ean_sel, lot_sel))
+                        cur.execute("DELETE FROM lots WHERE ean=%s AND lot=%s", (ean_sel, lot_sel))
                         conn.commit()
                         st.warning("Item excluído com sucesso!")
                     except Exception as e:
