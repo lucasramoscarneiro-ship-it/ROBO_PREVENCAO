@@ -15,6 +15,7 @@ from db import (
 from auth import login_box
 import painel_expiry_bot as painel
 
+st.set_page_config(page_title="Controle LRC - Painel Web da Loja", layout="wide")
 # ===============================
 # CONFIGURAÇÃO INICIAL
 # ===============================
@@ -143,6 +144,16 @@ st.set_page_config(page_title="Controle LRC - Acesso", layout="wide")
 # BOOTSTRAP DO ADMIN (primeiro acesso)
 # ===============================
 users_df = list_users(conn)
+try:
+    users_df = list_users(conn)
+except Exception as e:
+    st.error(f"Erro ao carregar usuários: {e}")
+    st.stop()
+
+if users_df is None:
+    st.error("❌ Falha ao carregar tabela de usuários. O banco pode estar corrompido.")
+    st.stop()
+
 if users_df.empty:
     st.warning("Nenhum usuário cadastrado. Crie o primeiro ADMIN.")
     with st.form("bootstrap_admin"):
@@ -301,13 +312,13 @@ with abas[1]:
             stores_df = conn.execute("SELECT id, name FROM stores").fetchall()
             store_map = {s[0]: s[1] for s in stores_df}
             if "store_id" in df.columns:
-                df["Loja"] = df["store_id"].map(store_map)
+                df["Loja"] = df["store_id"].map(store_map).fillna("Sem loja vinculada")
             else:
                 df["Loja"] = "Não vinculada"
 
             st.dataframe(
                 df[["id", "username", "name", "email", "role", "is_active", "Loja", "created_at"]],
-                use_container_width=True
+                width="stretch"
             )
     except Exception as e:
         st.error(f"Erro ao carregar usuários: {e}")
@@ -320,7 +331,14 @@ with abas[1]:
 # GESTÃO DE USUÁRIOS (ADMIN)
 # ===============================
 with abas[2]:
-    st.write("🧩 Debug: Entrou na aba Gestão de Usuários")  # Log visual
+    st.write("🧩 Debug: Entrou na aba Gestão de Usuários", user)
+    try:
+        df = list_users(conn)
+        st.write("✅ DEBUG: usuários carregados:", len(df))
+    except Exception as e:
+        st.error(f"💥 Erro no list_users: {e}")
+        st.exception(e)
+        st.stop()
 
     role = str(user.get("role", "")).strip().lower()
     if role != "admin":
@@ -337,13 +355,14 @@ with abas[2]:
                 store_map = {s[0]: s[1] for s in stores_df}
 
                 if "store_id" in df.columns:
-                    df["Loja"] = df["store_id"].map(store_map)
+                    
+                    df["Loja"] = df["store_id"].map(store_map).fillna("Sem loja vinculada")
                 else:
                     df["Loja"] = "Não vinculada"
 
                 st.dataframe(
                     df[["id", "username", "name", "email", "role", "is_active", "Loja", "created_at"]],
-                    use_container_width=True
+                    width="stretch"
                 )
 
             st.divider()

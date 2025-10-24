@@ -33,8 +33,6 @@ def main(conn, cfg, user):
 
     # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-    # --------- UI GLOBAL ---------
-    st.set_page_config(page_title="Controle LRC - Painel Web da Loja", layout="wide")
 
     # ADIÇÃO: indicador de loja atual na barra lateral (informativo)
     st.sidebar.info(f"🧭 Loja atual: {store_id}")
@@ -101,8 +99,23 @@ def main(conn, cfg, user):
 
     # ------------------ PRÉ-CÁLCULOS COMPARTILHADOS ------------------
     df = reporting.build_snapshots(conn)
-    if "store_id" in df.columns:
-        df = df[df["store_id"] == store_id]
+    if df is None or df.empty:
+        df = pd.DataFrame(columns=["ean","product_name","lot","expiry_date","qty","location","store_id"])
+    else:
+        if "store_id" in df.columns:
+            # normaliza tipos para comparação
+            try:
+                df["store_id"] = df["store_id"].astype(str)
+                sid = "" if store_id is None else str(store_id)
+                df = df[df["store_id"] == sid]
+            except Exception:
+                # fallback: tenta como int
+                try:
+                    df["store_id"] = df["store_id"].astype("Int64")
+                    if store_id is not None:
+                        df = df[df["store_id"] == int(store_id)]
+                except Exception:
+                    pass
     near = reporting.near_expiry(df, cfg["near_expiry_days"])
     exp = reporting.expired(df)
     # 🔔 Banner de alerta dentro do painel principal (refinado)
@@ -399,13 +412,19 @@ def main(conn, cfg, user):
     total_vencido = int(exp["qty"].sum()) if not exp.empty else 0
     total_a_vencer = int(near["qty"].sum()) if not near.empty else 0
 
-    mov = pd.read_sql_query("SELECT * FROM movements WHERE store_id IS ?", conn, params=(store_id,), parse_dates=["ts"])
-    if not mov.empty:
-        mov["data"] = mov["ts"].dt.date
-    total_recebido = int(mov[mov["type"]=="receipt"]["qty"].sum()) if not mov.empty else 0
-    total_vendido = int(mov[mov["type"]=="sale"]["qty"].sum()) if not mov.empty else 0
-    perc_vendido = (total_vendido/total_recebido*100) if total_recebido>0 else 0
-    perc_vencido = (total_vencido/total_recebido*100) if total_recebido>0 else 0
+    if store_id is None:
+        mov = pd.read_sql_query(
+            "SELECT * FROM movements WHERE store_id IS NULL",
+            conn,
+            parse_dates=["ts"]
+        )
+    else:
+        mov = pd.read_sql_query(
+            "SELECT * FROM movements WHERE store_id = ?",
+            conn,
+            params=(store_id,),
+            parse_dates=["ts"]
+        )
 
     # ------------------ ABA 1: Operacional ------------------
     with abas[1]:
@@ -528,8 +547,14 @@ def main(conn, cfg, user):
             df_fefo[["Tag", "Produto", "Lote", "Validade", "Qtde", "Local", "Sugestão"]],
             use_container_width=True,
         )
-
+     
+       
     # ------------------ ABA 2: Relatórios e Indicadores ------------------
+    total_recebido = int(mov[mov["type"] == "receipt"]["qty"].sum()) if not mov.empty else 0
+    total_vendido = int(mov[mov["type"] == "sale"]["qty"].sum()) if not mov.empty else 0
+    perc_vendido = (total_vendido / total_recebido * 100) if total_recebido > 0 else 0
+    perc_vencido = (total_vencido / total_recebido * 100) if total_recebido > 0 else 0
+    
     with abas[2]:
         st.subheader("📊 Indicadores (KPIs)")
         c1,c2,c3,c4,c5 = st.columns(5)
