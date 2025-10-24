@@ -90,10 +90,28 @@ def create_user(conn, username: str, name: str, email: str, pwd_hash: str,
 
 def list_users(conn):
     import pandas as pd
-    return pd.read_sql_query(
-        "SELECT id, username, name, email, role, is_active, store_id, created_at FROM users ORDER BY id DESC",
-        conn
-    )
+    try:
+        query = """
+            SELECT 
+                id,
+                username,
+                name,
+                email,
+                role,
+                is_active,
+                store_id,
+                created_at
+            FROM users
+            ORDER BY id DESC
+        """
+        df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        print(f"[list_users] Erro ao carregar usuários: {e}")
+        return pd.DataFrame(columns=[
+            "id", "username", "name", "email", "role", "is_active", "store_id", "created_at"
+        ])
+
 
 
 def update_user_status(conn, username: str, is_active: int):
