@@ -15,7 +15,56 @@ from db import (
 from auth import login_box
 import painel_expiry_bot as painel
 
-st.set_page_config(page_title="Controle LRC - Painel Web da Loja", layout="wide")
+st.set_page_config(
+    page_title="Controle LRC - Painel Web da Loja",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+st.markdown("""
+<style>
+/* 🌐 Torna layout adaptável */
+@media (max-width: 768px) {
+    /* Remove margens grandes em telas pequenas */
+    .block-container {
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
+        padding-top: 0.5rem;
+        padding-bottom: 1rem;
+    }
+
+    /* Ajusta tamanho de fontes */
+    h1, h2, h3, h4, h5, h6 {
+        font-size: 1rem !important;
+    }
+
+    /* Mantém botões grandes e clicáveis */
+    button, .stButton > button {
+        width: 100% !important;
+        font-size: 0.9rem !important;
+        padding: 0.6rem !important;
+    }
+
+    /* Tabelas mais scrolláveis */
+    [data-testid="stDataFrame"] {
+        overflow-x: auto !important;
+    }
+
+    /* Campos de formulário adaptáveis */
+    input, textarea, select {
+        width: 100% !important;
+    }
+
+    /* Tabs horizontais transformadas em vertical stack */
+    [role="tablist"] {
+        display: flex;
+        flex-direction: column;
+    }
+}
+
+/* Esconde a marca d'água do Streamlit em produção */
+#MainMenu, footer, header {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
 # ===============================
 # CONFIGURAÇÃO INICIAL
 # ===============================
@@ -355,7 +404,7 @@ with abas[2]:
                 store_map = {s[0]: s[1] for s in stores_df}
 
                 if "store_id" in df.columns:
-                    
+
                     df["Loja"] = df["store_id"].map(store_map).fillna("Sem loja vinculada")
                 else:
                     df["Loja"] = "Não vinculada"
