@@ -250,8 +250,34 @@ with abas[0]:
 # ===============================
 with abas[1]:
     if user.get("role", "").lower() != "admin":
-        st.info("🔒 Acesso restrito ao administrador.")
-        st.stop()
+        st.warning("🔒 Apenas administradores podem enviar alertas manualmente.")
+    else:
+        st.subheader("📤 Envio Manual de Alertas (ADMIN)")
+
+        lojas = conn.execute("SELECT id, name FROM stores").fetchall()
+        loja_opcoes = {f"{s[1]} (ID {s[0]})": s[0] for s in lojas}
+
+        loja_sel = st.selectbox("Selecione a loja para enviar o alerta", options=list(loja_opcoes.keys()))
+
+        if st.button("📤 Enviar alerta agora"):
+            store_id_alerta = loja_opcoes[loja_sel]
+            df_alerta = reporting.build_snapshots(conn)
+            df_alerta = df_alerta[df_alerta["store_id"] == store_id_alerta]
+            near_alerta = reporting.near_expiry(df_alerta, cfg["near_expiry_days"])
+
+            if near_alerta.empty:
+                st.info(f"Nenhum produto próximo da validade para a loja {loja_sel}.")
+            else:
+                near_body = reporting.to_console(
+                    near_alerta, f"Itens a vencer em {cfg['near_expiry_days']} dias"
+                )
+                ok, info = bot.enviar_email_alerta(
+                    cfg, f"⚠️ Alerta: produtos a vencer — {loja_sel}", near_body
+                )
+                if ok:
+                    st.success(info)
+                else:
+                    st.error(f"❌ {info}")
 
     st.subheader("👥 Lista de Usuários")
     try:
