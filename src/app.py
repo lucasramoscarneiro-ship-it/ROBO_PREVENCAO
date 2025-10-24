@@ -257,9 +257,13 @@ with abas[1]:
         lojas = conn.execute("SELECT id, name FROM stores").fetchall()
         loja_opcoes = {f"{s[1]} (ID {s[0]})": s[0] for s in lojas}
 
-        loja_sel = st.selectbox("Selecione a loja para enviar o alerta", options=list(loja_opcoes.keys()))
+        loja_sel = st.selectbox(
+            "Selecione a loja para enviar o alerta",
+            options=list(loja_opcoes.keys()),
+            key="alerta_loja_select"
+        )
 
-        if st.button("📤 Enviar alerta agora"):
+        if st.button("📤 Enviar alerta agora", key="btn_enviar_alerta_manual"):
             store_id_alerta = loja_opcoes[loja_sel]
             df_alerta = reporting.build_snapshots(conn)
             df_alerta = df_alerta[df_alerta["store_id"] == store_id_alerta]
@@ -303,134 +307,130 @@ with abas[1]:
 # ===============================
 # GESTÃO DE USUÁRIOS
 # ===============================
+# ===============================
+# GESTÃO DE USUÁRIOS (ADMIN)
+# ===============================
 with abas[2]:
-    if user.get("role", "").lower() != "admin":
-        st.info("Acesso restrito ao administrador.")
-        st.stop()
+    st.write("🧩 Debug: Entrou na aba Gestão de Usuários")  # Log visual
 
-    st.subheader("👥 Lista de Usuários")
-    df = list_users(conn)
-    if df is None or df.empty:
-        st.warning("Nenhum usuário cadastrado ainda.")
-        st.stop()
-    stores_df = conn.execute("SELECT id, name FROM stores").fetchall()
-    store_map = {s[0]: s[1] for s in stores_df}
-
-    if "store_id" in df.columns:
-        df["Loja"] = df["store_id"].map(store_map)
+    role = str(user.get("role", "")).strip().lower()
+    if role != "admin":
+        st.warning("🔒 Acesso restrito ao administrador.")
     else:
-        df["Loja"] = "Não vinculada"
-
-    st.dataframe(
-        df[["id", "username", "name", "email", "role", "is_active", "Loja", "created_at"]],
-        use_container_width=True
-    )
-
-    st.divider()
-    st.subheader("➕ Criar novo usuário")
-    with st.form("form_new_user"):
-        name = st.text_input("Nome completo")
-        email = st.text_input("E-mail")
-        username = st.text_input("Usuário (login)")
-        role = st.selectbox("Perfil", ["operador", "admin"])
-
-        stores = conn.execute("SELECT id, name FROM stores").fetchall()
-        store_names = [s[1] for s in stores]
-
-        col1, col2 = st.columns(2)
-        with col1:
-            # Monta lista com opção para criar nova loja
-            opcoes_lojas = store_names + ["➕ Criar nova loja"] if store_names else ["➕ Criar nova loja"]
-            store_option = st.selectbox("Loja", opcoes_lojas, key="select_loja")
-
-            # Campo persistente para nome da nova loja
-            if store_option == "➕ Criar nova loja":
-                nova_loja = st.text_input(
-                    "Digite o nome ou número da nova loja (ex: Loja 02, Filial SP):",
-                    key="nova_loja_input"
-                )
-                if nova_loja.strip():
-                    store_sel = nova_loja.strip()
-                    st.info(f"Nova loja '{store_sel}' será criada ao salvar o usuário.")
-                else:
-                    store_sel = None
-            else:
-                store_sel = store_option if store_option else None
-
-        pwd = st.text_input("Senha", type="password")
-        pwd2 = st.text_input("Confirmar senha", type="password")
-        ok_new = st.form_submit_button("Criar usuário")
-
-    if ok_new:
-        if not (name and email and username and pwd and pwd2 and store_sel):
-            st.error("Preencha todos os campos obrigatórios, incluindo a loja.")
-        elif pwd != pwd2:
-            st.error("As senhas não conferem.")
-        else:
-            try:
-                pwd_hash = bcrypt.hashpw(pwd.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-                # 🔹 Cria a loja se não existir
-                loja_existente = conn.execute("SELECT id FROM stores WHERE name=?", (store_sel,)).fetchone()
-                if not loja_existente:
-                    conn.execute("INSERT INTO stores (name) VALUES (?)", (store_sel,))
-                    conn.commit()
-
-                store_id = conn.execute("SELECT id FROM stores WHERE name=?", (store_sel,)).fetchone()[0]
-
-                create_user(
-                    conn,
-                    username=username,
-                    name=name,
-                    email=email,
-                    pwd_hash=pwd_hash,
-                    role=role,
-                    is_active=1,
-                    store_id=store_id
-                )
-
-                st.success(f"Usuário '{username}' criado e vinculado à loja '{store_sel}'.")
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Erro ao criar usuário: {e}")
-
-    st.divider()
-    st.subheader("✏️ Alterar perfil / Ativar ou Desativar usuário")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        u_sel = st.text_input("Usuário (login) para alterar")
-    with col2:
-        novo_role = st.selectbox("Novo perfil", ["operador", "admin"])
-    with col3:
-        ativo = st.checkbox("Ativo", value=True)
-
-    colA, colB = st.columns(2)
-    if colA.button("Salvar alterações"):
         try:
-            update_user_role(conn, u_sel, novo_role)
-            update_user_status(conn, u_sel, 1 if ativo else 0)
-            st.success("Alterações salvas com sucesso.")
+            st.subheader("👥 Lista de Usuários")
+
+            df = list_users(conn)
+            if df is None or df.empty:
+                st.warning("Nenhum usuário cadastrado ainda.")
+            else:
+                stores_df = conn.execute("SELECT id, name FROM stores").fetchall()
+                store_map = {s[0]: s[1] for s in stores_df}
+
+                if "store_id" in df.columns:
+                    df["Loja"] = df["store_id"].map(store_map)
+                else:
+                    df["Loja"] = "Não vinculada"
+
+                st.dataframe(
+                    df[["id", "username", "name", "email", "role", "is_active", "Loja", "created_at"]],
+                    use_container_width=True
+                )
+
+            st.divider()
+            st.subheader("➕ Criar novo usuário")
+            with st.form("form_new_user"):
+                name = st.text_input("Nome completo")
+                email = st.text_input("E-mail")
+                username = st.text_input("Usuário (login)")
+                role = st.selectbox("Perfil", ["operador", "admin"])
+
+                stores = conn.execute("SELECT id, name FROM stores").fetchall()
+                store_names = [s[1] for s in stores]
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    opcoes_lojas = store_names + ["➕ Criar nova loja"] if store_names else ["➕ Criar nova loja"]
+                    store_option = st.selectbox("Loja", opcoes_lojas, key="select_loja")
+
+                    if store_option == "➕ Criar nova loja":
+                        nova_loja = st.text_input("Digite o nome da nova loja:", key="nova_loja_input")
+                        store_sel = nova_loja.strip() if nova_loja.strip() else None
+                    else:
+                        store_sel = store_option if store_option else None
+
+                pwd = st.text_input("Senha", type="password")
+                pwd2 = st.text_input("Confirmar senha", type="password")
+                ok_new = st.form_submit_button("Criar usuário")
+
+            if ok_new:
+                if not (name and email and username and pwd and pwd2 and store_sel):
+                    st.error("Preencha todos os campos obrigatórios, incluindo a loja.")
+                elif pwd != pwd2:
+                    st.error("As senhas não conferem.")
+                else:
+                    try:
+                        pwd_hash = bcrypt.hashpw(pwd.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                        loja_existente = conn.execute("SELECT id FROM stores WHERE name=?", (store_sel,)).fetchone()
+                        if not loja_existente:
+                            conn.execute("INSERT INTO stores (name) VALUES (?)", (store_sel,))
+                            conn.commit()
+
+                        store_id = conn.execute("SELECT id FROM stores WHERE name=?", (store_sel,)).fetchone()[0]
+                        create_user(
+                            conn,
+                            username=username,
+                            name=name,
+                            email=email,
+                            pwd_hash=pwd_hash,
+                            role=role,
+                            is_active=1,
+                            store_id=store_id
+                        )
+                        st.success(f"Usuário '{username}' criado e vinculado à loja '{store_sel}'.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao criar usuário: {e}")
+
+            st.divider()
+            st.subheader("✏️ Alterar perfil / Ativar ou Desativar usuário")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                u_sel = st.text_input("Usuário (login) para alterar")
+            with col2:
+                novo_role = st.selectbox("Novo perfil", ["operador", "admin"])
+            with col3:
+                ativo = st.checkbox("Ativo", value=True)
+
+            colA, colB = st.columns(2)
+            if colA.button("Salvar alterações"):
+                try:
+                    update_user_role(conn, u_sel, novo_role)
+                    update_user_status(conn, u_sel, 1 if ativo else 0)
+                    st.success("Alterações salvas com sucesso.")
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+            st.divider()
+            st.subheader("🔒 Redefinir senha de usuário")
+            with st.form("form_reset_pwd"):
+                u_pwd = st.text_input("Usuário (login)")
+                npwd = st.text_input("Nova senha", type="password")
+                npwd2 = st.text_input("Confirmar nova senha", type="password")
+                ok_pwd = st.form_submit_button("Atualizar senha")
+
+            if ok_pwd:
+                if not (u_pwd and npwd and npwd2):
+                    st.error("Preencha todos os campos.")
+                elif npwd != npwd2:
+                    st.error("As senhas não conferem.")
+                else:
+                    try:
+                        h = bcrypt.hashpw(npwd.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                        update_user_password(conn, u_pwd, h)
+                        st.success("Senha atualizada com sucesso.")
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
         except Exception as e:
-            st.error(f"Erro: {e}")
-
-    st.divider()
-    st.subheader("🔒 Redefinir senha de usuário")
-    with st.form("form_reset_pwd"):
-        u_pwd = st.text_input("Usuário (login)")
-        npwd = st.text_input("Nova senha", type="password")
-        npwd2 = st.text_input("Confirmar nova senha", type="password")
-        ok_pwd = st.form_submit_button("Atualizar senha")
-
-    if ok_pwd:
-        if not (u_pwd and npwd and npwd2):
-            st.error("Preencha todos os campos.")
-        elif npwd != npwd2:
-            st.error("As senhas não conferem.")
-        else:
-            try:
-                h = bcrypt.hashpw(npwd.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-                update_user_password(conn, u_pwd, h)
-                st.success("Senha atualizada com sucesso.")
-            except Exception as e:
-                st.error(f"Erro: {e}")
+            st.error(f"Erro ao renderizar Gestão de Usuários: {e}")
+            st.exception(e)
