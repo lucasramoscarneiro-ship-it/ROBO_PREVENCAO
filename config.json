@@ -1,6 +1,6 @@
 {
   "database_path": "data/expirybot.db",
-  "report_dir": "C:/Users/lucas/Downloads/ROBO_PREVENCAO/reports",
+  "report_dir": "data/reports",
   "near_expiry_days": 15,
   "alert_email": {
     "enabled": true,
@@ -10,9 +10,6 @@
     "username": "lucasramoscarneiro@gmail.com",
     "password": "ilax qhxz khvv ikfp",
     "from_addr": "lucasramoscarneiro@gmail.com",
-    "to_addrs": [
-      "lucasramoscarneiro@gmail.com",
-      "bia_cardoso@outlook.com"
-    ]
+    "to_addrs": ["lucasramoscarneiro@gmail.com"]
   }
 }
