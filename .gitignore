@@ -1,0 +1,36 @@
+# Arquivos temporários e cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Ambiente virtual Python
+.venv/
+venv/
+env/
+
+# Dados locais e relatórios
+data/
+*.db
+*.sqlite
+*.xlsx
+*.csv
+*.json
+*.zip
+*.pdf
+*.xml
+
+# Arquivos de configuração locais
+config_loja_*.json
+config.json
+
+# Arquivos de build e sistema
+.DS_Store
+Thumbs.db
+
+# Pastas específicas do Streamlit
+.streamlit/secrets.toml
+
+.nfe_002310.xml 
+.projeto.zip

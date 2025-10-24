@@ -23,6 +23,7 @@ cfg = json.loads(Path(CFG_PATH).read_text(encoding="utf-8"))
 conn = get_conn(cfg["database_path"])
 init_db(conn)
 
+
 def enviar_alertas_automaticos():
     """
     Envia automaticamente e-mails de alerta para todas as lojas
@@ -69,7 +70,7 @@ def enviar_alertas_automaticos():
             # Combina todos os prazos de validade em um único dataframe
             near_30 = reporting.near_expiry(df_loja, 30)
             near_15 = reporting.near_expiry(df_loja, 15)
-            near_7  = reporting.near_expiry(df_loja, 7)
+            near_7 = reporting.near_expiry(df_loja, 7)
 
             # Junta todos os itens únicos
             near_total = pd.concat([near_30, near_15, near_7]).drop_duplicates(subset=["ean", "lot"], keep="first")
@@ -111,6 +112,8 @@ def enviar_alertas_automaticos():
 
                     if ok:
                         houve_envio = True
+                        cfg_loja["last_alert_sent"] = hoje
+                        CFG_STORE_PATH.write_text(json.dumps(cfg_loja, indent=2, ensure_ascii=False), encoding="utf-8")
                         print(f"[{datetime.now():%Y-%m-%d %H:%M}] ✅ E-mail consolidado enviado para {loja_nome}")
                     else:
                         print(f"[{datetime.now():%Y-%m-%d %H:%M}] ❌ Falha ao enviar consolidado para {loja_nome}: {info}")
@@ -118,14 +121,10 @@ def enviar_alertas_automaticos():
                 except Exception as e:
                     print(f"Erro ao gerar ou enviar PDF consolidado para {loja_nome}: {e}")
 
-
     except Exception as e:
         print("Erro no envio automático de alertas:")
         traceback.print_exc()
 
-
-# Executa o alerta automático (somente 1x no carregamento)
-enviar_alertas_automaticos()
 
 st.set_page_config(page_title="Controle LRC - Acesso", layout="wide")
 
@@ -231,6 +230,7 @@ except Exception as e:
 # ===============================
 abas = st.tabs([
     "📊 Painel Principal",
+    "📤 Envio Manual de Alertas (ADMIN)",
     "👥 Gestão de Usuários (ADMIN)"
 ])
 
@@ -241,9 +241,34 @@ with abas[0]:
     painel.main(conn, cfg, user)
 
 # ===============================
-# GESTÃO DE USUÁRIOS
+# ENVIO MANUAL DE ALERTAS (ADMIN)
 # ===============================
 with abas[1]:
+    if user["role"] != "admin":
+        st.info("🔒 Apenas administradores podem enviar alertas manuais.")
+    else:
+        st.subheader("📤 Envio Manual de E-mails de Alerta para Todas as Lojas")
+        st.caption("Clique abaixo para enviar alertas de validade imediatamente para todas as lojas com produtos próximos do vencimento.")
+
+        if "email_manual_enviado" not in st.session_state:
+            st.session_state.email_manual_enviado = False
+
+        if st.button("📧 Enviar alertas agora"):
+            if st.session_state.email_manual_enviado:
+                st.warning("⚠️ O alerta já foi enviado nesta sessão. Evite reenvios.")
+            else:
+                with st.spinner("Enviando alertas..."):
+                    try:
+                        enviar_alertas_automaticos()
+                        st.success("✅ E-mails de alerta enviados com sucesso!")
+                        st.session_state.email_manual_enviado = True
+                    except Exception as e:
+                        st.error(f"❌ Erro ao enviar alertas: {e}")
+
+# ===============================
+# GESTÃO DE USUÁRIOS
+# ===============================
+with abas[2]:
     if user["role"] != "admin":
         st.info("Acesso restrito ao administrador.")
         st.stop()
@@ -294,8 +319,6 @@ with abas[1]:
             else:
                 store_sel = store_option if store_option else None
 
-
-
         pwd = st.text_input("Senha", type="password")
         pwd2 = st.text_input("Confirmar senha", type="password")
         ok_new = st.form_submit_button("Criar usuário")
@@ -333,7 +356,6 @@ with abas[1]:
 
             except Exception as e:
                 st.error(f"Erro ao criar usuário: {e}")
-
 
     st.divider()
     st.subheader("✏️ Alterar perfil / Ativar ou Desativar usuário")
