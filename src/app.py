@@ -245,38 +245,48 @@ with abas[0]:
 # ===============================
 # ENVIO MANUAL DE ALERTAS (ADMIN)
 # ===============================
+# ===============================
+# GESTÃO DE USUÁRIOS (ADMIN)
+# ===============================
 with abas[1]:
-    if user["role"] != "admin":
-        st.info("🔒 Apenas administradores podem enviar alertas manuais.")
-    else:
-        st.subheader("📤 Envio Manual de E-mails de Alerta para Todas as Lojas")
-        st.caption("Clique abaixo para enviar alertas de validade imediatamente para todas as lojas com produtos próximos do vencimento.")
+    if user.get("role", "").lower() != "admin":
+        st.info("🔒 Acesso restrito ao administrador.")
+        st.stop()
 
-        if "email_manual_enviado" not in st.session_state:
-            st.session_state.email_manual_enviado = False
-
-        if st.button("📧 Enviar alertas agora"):
-            if st.session_state.email_manual_enviado:
-                st.warning("⚠️ O alerta já foi enviado nesta sessão. Evite reenvios.")
+    st.subheader("👥 Lista de Usuários")
+    try:
+        df = list_users(conn)
+        if df is None or df.empty:
+            st.warning("Nenhum usuário cadastrado ainda.")
+        else:
+            stores_df = conn.execute("SELECT id, name FROM stores").fetchall()
+            store_map = {s[0]: s[1] for s in stores_df}
+            if "store_id" in df.columns:
+                df["Loja"] = df["store_id"].map(store_map)
             else:
-                with st.spinner("Enviando alertas..."):
-                    try:
-                        enviar_alertas_automaticos()
-                        st.success("✅ E-mails de alerta enviados com sucesso!")
-                        st.session_state.email_manual_enviado = True
-                    except Exception as e:
-                        st.error(f"❌ Erro ao enviar alertas: {e}")
+                df["Loja"] = "Não vinculada"
+
+            st.dataframe(
+                df[["id", "username", "name", "email", "role", "is_active", "Loja", "created_at"]],
+                use_container_width=True
+            )
+    except Exception as e:
+        st.error(f"Erro ao carregar usuários: {e}")
+
 
 # ===============================
 # GESTÃO DE USUÁRIOS
 # ===============================
 with abas[2]:
-    if user["role"] != "admin":
+    if user.get("role", "").lower() != "admin":
         st.info("Acesso restrito ao administrador.")
         st.stop()
 
     st.subheader("👥 Lista de Usuários")
     df = list_users(conn)
+    if df is None or df.empty:
+        st.warning("Nenhum usuário cadastrado ainda.")
+        st.stop()
     stores_df = conn.execute("SELECT id, name FROM stores").fetchall()
     store_map = {s[0]: s[1] for s in stores_df}
 
