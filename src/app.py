@@ -23,10 +23,16 @@ if not CFG_PATH.exists():
     st.error(f"❌ Arquivo de configuração não encontrado: {CFG_PATH}")
     st.stop()
 
-cfg = json.loads(Path(CFG_PATH).read_text(encoding="utf-8"))
+cfg = json.loads(CFG_PATH.read_text(encoding="utf-8"))
+
+db_path = Path(cfg["database_path"])
+db_path.parent.mkdir(parents=True, exist_ok=True)
+
+if not db_path.exists():
+    st.warning(f"⚠️ Banco de dados não encontrado em {db_path}. Será criado automaticamente.")
+
 conn = get_conn(cfg["database_path"])
 init_db(conn)
-
 
 def enviar_alertas_automaticos():
     """
