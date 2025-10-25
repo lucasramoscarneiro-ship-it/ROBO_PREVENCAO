@@ -27,20 +27,28 @@ def get_conn(_ignored_path: str = ""):
     O argumento é ignorado (mantido por compatibilidade com o SQLite).
     """
     required = ["host", "port", "database", "user", "password"]
-    missing = [k for k in required if not _SECRETS.get(k)]
-    if missing:
-        raise RuntimeError(f"Faltam chaves no secrets.toml (postgres): {missing}")
+    if not _SECRETS.get("uri"):
+        missing = [k for k in required if not _SECRETS.get(k)]
+        if missing:
+            raise RuntimeError(f"Faltam chaves no secrets.toml (postgres): {missing}")
 
-    conn = psycopg2.connect(
-        host=_SECRETS["host"],
-        port=int(_SECRETS["port"]),
-        dbname=_SECRETS["database"],
-        user=_SECRETS["user"],
-        password=_SECRETS["password"],
-        sslmode=_SECRETS.get("sslmode", "require"),
-        cursor_factory=psycopg2.extras.RealDictCursor,
-    )
-    conn.autocommit = False  # manter controle de transação
+    if _SECRETS.get("uri"):
+        conn = psycopg2.connect(
+            _SECRETS["uri"],
+            sslmode=_SECRETS.get("sslmode", "require"),
+            cursor_factory=psycopg2.extras.RealDictCursor,
+        )
+    else:
+        conn = psycopg2.connect(
+            host=_SECRETS["host"],
+            port=int(_SECRETS["port"]),
+            dbname=_SECRETS["database"],
+            user=_SECRETS["user"],
+            password=_SECRETS["password"],
+            sslmode=_SECRETS.get("sslmode", "require"),
+            cursor_factory=psycopg2.extras.RealDictCursor,
+        )
+    conn.autocommit = False
     return conn
 
 
