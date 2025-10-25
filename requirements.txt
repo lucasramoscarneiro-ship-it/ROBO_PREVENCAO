@@ -14,8 +14,10 @@ python-docx>=1.1.2
 
 # Segurança e autenticação
 bcrypt>=4.1.2
+streamlit-authenticator>=0.3.2
 
 # Manipulação de arquivos / requisições
 requests>=2.32.3
 
-streamlit-authenticator>=0.3.2
+# Banco de dados (Supabase / PostgreSQL)
+psycopg2-binary==2.9.11
