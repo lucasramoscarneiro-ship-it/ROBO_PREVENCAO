@@ -1,0 +1,15 @@
+{
+  "database_path": "data/expirybot.db",
+  "report_dir": "data/reports",
+  "near_expiry_days": 15,
+  "alert_email": {
+    "enabled": true,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "use_tls": true,
+    "username": "lucasramoscarneiro@gmail.com",
+    "password": "ilax qhxz khvv ikfp",
+    "from_addr": "lucasramoscarneiro@gmail.com",
+    "to_addrs": ["lucasramoscarneiro@gmail.com"]
+  }
+}
