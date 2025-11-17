@@ -13,6 +13,10 @@ from report_pdf import gerar_relatorio_pdf
 from nfe_import import parse_nfe_xml
 import streamlit.components.v1 as components
 import psycopg2.extras
+import qrcode
+import base64
+from io import BytesIO
+from urllib.parse import urlparse, parse_qs
 
 if "forcar_reload_vendas" not in st.session_state:
     st.session_state["forcar_reload_vendas"] = False
@@ -234,6 +238,7 @@ def main(conn, cfg, user):
         "📋 Controle Operacional",
         "📈 Relatórios e Indicadores",
         "📤 Alertas e Comunicação",
+        "📱 Scanner QR Code",
         "⚙️ Configurações do Sistema",
     ])
 
@@ -349,7 +354,10 @@ def main(conn, cfg, user):
             lot_r = st.text_input("Lote")
             expiry_r = st.date_input("Data de Validade")
             qty_r = st.number_input("Quantidade", min_value=1, step=1)
-            location_r = st.text_input("Local", value=f"Loja {store_id}")
+            location_r = st.text_input(
+                "Local",
+                value=st.session_state.get("ultimo_local", f"Loja {store_id}")
+            )
             submitted_r = st.form_submit_button("Registrar Entrada")
 
             if submitted_r:
@@ -475,7 +483,11 @@ def main(conn, cfg, user):
                     help=f"Saldo disponível neste lote: {saldo_lote}",
                 )
 
-                location_v = st.text_input("Local", value=f"Loja {store_id}", key="saida_local")
+                location_v = st.text_input(
+                    "Local",
+                    value=st.session_state.get("ultimo_local", f"Loja {store_id}")
+                )
+
 
                 submitted_v = st.form_submit_button("Registrar Saída")
 
@@ -1020,6 +1032,20 @@ def main(conn, cfg, user):
     # ------------------ ABA 4: Configurações ------------------
     if user.get("role") == "admin":
         with abas[4]:
+            st.subheader("📱 Scanner de QR Code — Identificação de Balcão/Corredor")
+
+            from streamlit_qrcode_scanner import qrcode_scanner
+
+            qr_code = qrcode_scanner()
+
+            if qr_code:
+                st.success(f"📍 Balcão identificado: **{qr_code}**")
+                st.session_state["ultimo_local"] = qr_code
+                st.info("Agora vá até a aba de Saída ou Entrada, o local será preenchido automaticamente.")
+
+            
+
+        with abas[5]:
             st.subheader("⚙️ Parâmetros do Sistema (Administrador)")
 
             # --- Carrega lista de lojas ---
@@ -1105,4 +1131,6 @@ def main(conn, cfg, user):
 
                 CFG_STORE_PATH.write_text(json.dumps(cfg_loja, indent=2, ensure_ascii=False), encoding="utf-8")
                 st.success(f"Configurações atualizadas para {loja_sel}.")
-                st.rerun()
+                st.rerun() 
+
+   
