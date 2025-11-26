@@ -408,136 +408,6 @@ def main(conn, cfg, user):
                     st.error(f"Erro ao registrar: {e}")
 
 
-
-        st.divider()
-        st.subheader("➖ Registrar Saída (Venda)")
-
-        # 🔄 Carrega snapshot atualizado direto do banco
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT s.ean, s.lot, s.qty, s.location, s.store_id, p.product_name, l.expiry_date
-            FROM stock s
-            LEFT JOIN lots l ON l.ean = s.ean AND l.lot = s.lot
-            LEFT JOIN products p ON p.ean = s.ean
-            WHERE s.store_id = %s;
-        """, (store_id,))
-        itens = cur.fetchall()
-
-        df_disponivel = pd.DataFrame(
-            itens,
-            columns=["ean", "lot", "qty", "location", "store_id", "product_name", "expiry_date"]
-        )
-        df_disponivel["expiry_date"] = pd.to_datetime(df_disponivel["expiry_date"], errors="coerce")
-
-        # Filtra somente produtos com saldo positivo
-        df_disponivel = df_disponivel[
-            (df_disponivel["qty"].fillna(0) > 0)
-            & (df_disponivel["product_name"].notna())
-            & (df_disponivel["ean"].notna())
-        ].copy()
-
-        if df_disponivel.empty:
-            st.info("Não há itens com saldo disponível para venda nesta loja.")
-        else:
-            # ===============================
-            # 🔹 FORMULÁRIO DE VENDA
-            # ===============================
-            with st.form("form_saida_venda"):
-                prods = (
-                    df_disponivel[["ean", "product_name"]]
-                    .drop_duplicates()
-                    .sort_values(["product_name", "ean"])
-                )
-                prod_options = prods.to_dict("records")
-                prod_sel = st.selectbox(
-                    "Produto",
-                    options=prod_options,
-                    format_func=lambda r: f"{r['product_name']} — {r['ean']}",
-                    key="saida_produto",
-                )
-
-                df_lotes = (
-                    df_disponivel[df_disponivel["ean"] == prod_sel["ean"]]
-                    .sort_values(["expiry_date", "lot"])
-                    .copy()
-                )
-                lote_options = df_lotes.to_dict("records")
-
-                lote_sel = st.selectbox(
-                    "Lote / Validade / Saldo / Local",
-                    options=lote_options,
-                    format_func=lambda r: (
-                        f"Lote {r['lot']} • Val {pd.to_datetime(r['expiry_date']).date():%d/%m/%Y} "
-                        f"• Qtde {int(r['qty'])} • {r.get('location','') or ''}"
-                    ),
-                    key="saida_lote",
-                )
-
-                saldo_lote = int(lote_sel["qty"])
-                qty_v = st.number_input(
-                    "Quantidade a vender",
-                    min_value=1,
-                    max_value=max(1, saldo_lote),
-                    value=1,
-                    step=1,
-                    help=f"Saldo disponível neste lote: {saldo_lote}",
-                )
-
-                location_v = st.text_input(
-                    "Local",
-                    value=st.session_state.get("ultimo_local", f"Loja {store_id}")
-                )
-
-
-                submitted_v = st.form_submit_button("Registrar Saída")
-
-            # ===============================
-            # 🔹 PROCESSAMENTO ÚNICO DA VENDA
-            # ===============================
-            if submitted_v:
-                # Protege contra duplo clique
-                if st.session_state.get("venda_em_progresso", False):
-                    st.warning("⏳ Venda já em processamento, aguarde...")
-                    st.stop()
-
-                st.session_state["venda_em_progresso"] = True
-
-                try:
-                    if int(qty_v) > int(lote_sel["qty"]):
-                        st.error("Quantidade maior que o saldo disponível.")
-                        st.session_state["venda_em_progresso"] = False
-                        st.stop()
-
-                    bot.movimentar(
-                        conn,
-                        tipo="sale",
-                        ean=lote_sel["ean"],
-                        lot=lote_sel["lot"],
-                        qty=int(qty_v),
-                        observacao=f"Venda manual via painel — {datetime.now():%Y-%m-%d %H:%M}",
-                        local=location_v,
-                        store_id=store_id,
-                    )
-
-                    # Marca que precisa atualizar os dados
-                    st.session_state["forcar_reload_vendas"] = True
-                    st.session_state["venda_em_progresso"] = False
-
-                    # Mostra mensagem e atualiza sem rerun
-                    st.success(f"✅ Venda registrada com sucesso! ({qty_v} unid. removidas do lote {lote_sel['lot']})")
-
-                    # Atualiza a lista de vendas manualmente sem reload global
-                    df_vendidos = carregar_vendas(conn, store_id, _salt=datetime.now().timestamp())
-
-                except Exception as e:
-                    conn.rollback()
-                    st.session_state["venda_em_progresso"] = False
-                    st.error(f"❌ Erro ao registrar saída: {e}")
-
-
-
-
-
     # ------------------ Cálculos de totais ------------------
     total_estoque = 0
     if df is not None and not df.empty:
@@ -696,15 +566,46 @@ def main(conn, cfg, user):
 
 
             colA, colB = st.columns(2)
+
             if colA.button("💾 Salvar Alterações"):
                 try:
-                    cur = conn.cursor()
-                    cur.execute("UPDATE stock SET qty=%s, location=%s WHERE ean=%s AND lot=%s", (nova_qtd, novo_local, ean_sel, lot_sel))
-                    cur.execute("UPDATE lots SET expiry_date=%s WHERE ean=%s AND lot=%s", (nova_data.isoformat(), ean_sel, lot_sel))
-                    conn.commit()
-                    st.success("Item atualizado com sucesso!")
+                    # Garantir int
+                    nova_qtd_int = int(nova_qtd)
+                    qtd_inicial_int = int(qtd_inicial)
+
+                    # Se a nova quantidade for MAIOR ou IGUAL → só atualiza estoque direto
+                    if nova_qtd_int >= qtd_inicial_int:
+                        cur = conn.cursor()
+                        cur.execute(
+                            "UPDATE stock SET qty=%s, location=%s WHERE ean=%s AND lot=%s",
+                            (nova_qtd_int, novo_local, ean_sel, lot_sel),
+                        )
+                        cur.execute(
+                            "UPDATE lots SET expiry_date=%s WHERE ean=%s AND lot=%s",
+                            (nova_data.isoformat(), ean_sel, lot_sel),
+                        )
+                        conn.commit()
+                        st.success("Item atualizado com sucesso!")
+                    else:
+                        # Nova quantidade MENOR → precisamos perguntar se foi venda ou só ajuste
+                        delta = qtd_inicial_int - nova_qtd_int  # quanto está saindo do estoque
+
+                        st.session_state["ajuste_pendente"] = {
+                            "ean": ean_sel,
+                            "lot": lot_sel,
+                            "qtd_antiga": qtd_inicial_int,
+                            "nova_qtd": nova_qtd_int,
+                            "delta": delta,
+                            "nova_data": nova_data,
+                            "novo_local": novo_local,
+                            "store_id": store_id,
+                        }
+                        st.session_state["mostrar_modal_ajuste"] = True
+                        st.warning("Confirme abaixo se essa redução de quantidade foi VENDA ou apenas ajuste de estoque.")
+
                 except Exception as e:
-                    st.error(f"Erro ao atualizar: {e}")
+                    st.error(f"Erro ao preparar alteração: {e}")
+
 
             if colB.button("🗑️ Excluir Item do Estoque"):
                 confirm = st.checkbox("Confirmar exclusão permanente do item")
@@ -723,6 +624,96 @@ def main(conn, cfg, user):
             "product_name":"Produto", "lot":"Lote", "expiry_date":"Validade", "qty":"Qtde", "location":"Local", "store_id":"Loja"
         }), use_container_width=True)
         
+        # ============================
+        # "Modal" de confirmação de ajuste
+        # ============================
+        ajuste_ctx = st.session_state.get("ajuste_pendente")
+        if st.session_state.get("mostrar_modal_ajuste", False) and ajuste_ctx:
+            st.markdown("---")
+            with st.container(border=True):
+                st.subheader("⚖️ Confirmar redução de quantidade")
+
+                st.write(
+                    f"**EAN:** {ajuste_ctx['ean']}  \n"
+                    f"**Lote:** {ajuste_ctx['lot']}  \n"
+                    f"**Quantidade anterior:** {ajuste_ctx['qtd_antiga']}  \n"
+                    f"**Nova quantidade:** {ajuste_ctx['nova_qtd']}  \n"
+                    f"**Redução:** {ajuste_ctx['delta']} unidade(s)"
+                )
+
+                col_c1, col_c2, col_c3 = st.columns(3)
+
+                # ✅ Registrar como venda
+                with col_c1:
+                    if st.button("✅ Registrar como VENDA", key="btn_confirma_venda_ajuste"):
+                        try:
+                            cur = conn.cursor()
+
+                            # Atualiza estoque + validade
+                            cur.execute(
+                                "UPDATE stock SET qty=%s, location=%s WHERE ean=%s AND lot=%s",
+                                (ajuste_ctx["nova_qtd"], ajuste_ctx["novo_local"], ajuste_ctx["ean"], ajuste_ctx["lot"]),
+                            )
+                            cur.execute(
+                                "UPDATE lots SET expiry_date=%s WHERE ean=%s AND lot=%s",
+                                (ajuste_ctx["nova_data"].isoformat(), ajuste_ctx["ean"], ajuste_ctx["lot"]),
+                            )
+
+                            # Registra movimento de VENDA da diferença
+                            bot.movimentar(
+                                conn,
+                                tipo="sale",
+                                ean=ajuste_ctx["ean"],
+                                lot=ajuste_ctx["lot"],
+                                qty=int(ajuste_ctx["delta"]),
+                                observacao=(
+                                    f"Ajuste via Controle Operacional marcado como VENDA — "
+                                    f"{datetime.now():%Y-%m-%d %H:%M}"
+                                ),
+
+                                local=ajuste_ctx["novo_local"],
+                                store_id=ajuste_ctx["store_id"],
+                            )
+
+                            conn.commit()
+
+                            st.session_state["ajuste_pendente"] = None
+                            st.session_state["mostrar_modal_ajuste"] = False
+                            st.success("Venda registrada e estoque atualizado com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao registrar venda: {e}")
+
+                # 📦 Apenas ajuste de estoque (não registra venda)
+                with col_c2:
+                    if st.button("📦 Apenas ajuste de estoque", key="btn_confirma_ajuste_simples"):
+                        try:
+                            cur = conn.cursor()
+                            cur.execute(
+                                "UPDATE stock SET qty=%s, location=%s WHERE ean=%s AND lot=%s",
+                                (ajuste_ctx["nova_qtd"], ajuste_ctx["novo_local"], ajuste_ctx["ean"], ajuste_ctx["lot"]),
+                            )
+                            cur.execute(
+                                "UPDATE lots SET expiry_date=%s WHERE ean=%s AND lot=%s",
+                                (ajuste_ctx["nova_data"].isoformat(), ajuste_ctx["ean"], ajuste_ctx["lot"]),
+                            )
+                            conn.commit()
+
+                            st.session_state["ajuste_pendente"] = None
+                            st.session_state["mostrar_modal_ajuste"] = False
+                            st.success("Estoque atualizado sem registrar venda.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao ajustar estoque: {e}")
+
+                # ❌ Cancelar operação
+                with col_c3:
+                    if st.button("❌ Cancelar", key="btn_cancela_ajuste"):
+                        st.session_state["ajuste_pendente"] = None
+                        st.session_state["mostrar_modal_ajuste"] = False
+                        st.info("Alteração de quantidade cancelada.")
+                        st.rerun()
+
 
         st.subheader("🏷️ Sugestão FEFO (Primeiro a Vencer, Primeiro a Sair)")
 
