@@ -21,3 +21,7 @@ requests>=2.32.3
 
 # Banco de dados (Supabase / PostgreSQL)
 psycopg2-binary>=2.9.9
+
+# QR Code
+qrcode[pil]>=7.4.2
+Pillow>=10.4.0
