@@ -655,46 +655,45 @@ def main(conn, cfg, user):
 
                 col_c1, col_c2, col_c3 = st.columns(3)
 
-                # ✅ Registrar como venda
+                # ✅ Registrar como VENDA
                 with col_c1:
                     if st.button("✅ Registrar como VENDA", key="btn_confirma_venda_ajuste"):
                         try:
+                            # 1️⃣ Atualiza apenas validade e local (NÃO mexe na quantidade aqui)
                             cur = conn.cursor()
-
-                            # Atualiza estoque + validade
-                            cur.execute(
-                                "UPDATE stock SET qty=%s, location=%s WHERE ean=%s AND lot=%s",
-                                (ajuste_ctx["nova_qtd"], ajuste_ctx["novo_local"], ajuste_ctx["ean"], ajuste_ctx["lot"]),
-                            )
                             cur.execute(
                                 "UPDATE lots SET expiry_date=%s WHERE ean=%s AND lot=%s",
                                 (ajuste_ctx["nova_data"].isoformat(), ajuste_ctx["ean"], ajuste_ctx["lot"]),
                             )
+                            cur.execute(
+                                "UPDATE stock SET location=%s WHERE ean=%s AND lot=%s AND store_id=%s",
+                                (ajuste_ctx["novo_local"], ajuste_ctx["ean"], ajuste_ctx["lot"], ajuste_ctx["store_id"]),
+                            )
+                            conn.commit()
 
-                            # Registra movimento de VENDA da diferença
+                            # 2️⃣ Deixa a baixa de quantidade por conta do movimentar()
                             bot.movimentar(
                                 conn,
                                 tipo="sale",
                                 ean=ajuste_ctx["ean"],
                                 lot=ajuste_ctx["lot"],
-                                qty=int(ajuste_ctx["delta"]),
+                                qty=int(ajuste_ctx["delta"]),  # quanto vai sair do estoque
                                 observacao=(
                                     f"Ajuste via Controle Operacional marcado como VENDA — "
                                     f"{datetime.now():%Y-%m-%d %H:%M}"
                                 ),
-
                                 local=ajuste_ctx["novo_local"],
                                 store_id=ajuste_ctx["store_id"],
                             )
-
-                            conn.commit()
 
                             st.session_state["ajuste_pendente"] = None
                             st.session_state["mostrar_modal_ajuste"] = False
                             st.success("Venda registrada e estoque atualizado com sucesso!")
                             st.rerun()
+
                         except Exception as e:
                             st.error(f"Erro ao registrar venda: {e}")
+
 
                 # 📦 Apenas ajuste de estoque (não registra venda)
                 with col_c2:
@@ -1030,24 +1029,7 @@ def main(conn, cfg, user):
             colB.success(f"PDF gerado em: {pdf_path}")
             with open(pdf_path, "rb") as f:
                 colB.download_button("Baixar PDF", f, file_name=Path(pdf_path).name)
-
-
-    # ------------------ ABA 4: Configurações ------------------
-    if user.get("role") == "admin":
-        with abas[4]:
-            st.subheader("📱 Scanner de QR Code — Identificação de Balcão/Corredor")
-
-            from streamlit_qrcode_scanner import qrcode_scanner
-
-            qr_code = qrcode_scanner()
-
-            if qr_code:
-                st.success(f"📍 Balcão identificado: **{qr_code}**")
-                st.session_state["ultimo_local"] = qr_code
-                st.info("Agora vá até a aba de Saída ou Entrada, o local será preenchido automaticamente.")
-
-            
-
+                
         with abas[5]:
             st.subheader("⚙️ Parâmetros do Sistema (Administrador)")
 
