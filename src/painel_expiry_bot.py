@@ -530,7 +530,7 @@ def main(conn, cfg, user):
 
             col1, col2, col3 = st.columns(3)
             with col1:
-                # --- Quantidade ---
+                # Saldo atual em estoque (somente informativo)
                 qtd_val = (
                     item.get("qty")
                     or item.get("quantidade")
@@ -541,7 +541,19 @@ def main(conn, cfg, user):
                     qtd_inicial = int(float(qtd_val)) if pd.notna(qtd_val) else 0
                 except (ValueError, TypeError):
                     qtd_inicial = 0
-                nova_qtd = st.number_input("Quantidade", min_value=0, value=qtd_inicial)
+
+                st.markdown(f"**Saldo atual em estoque:** `{qtd_inicial}` unidade(s)")
+
+                # Quantidade a baixar (venda ou ajuste)
+                qtd_baixar = st.number_input(
+                    "Quantidade a baixar (venda ou ajuste)",
+                    min_value=0,
+                    max_value=qtd_inicial,
+                    value=0,
+                    step=1,
+                    help="Informe quanto vai sair do estoque (por venda ou ajuste)."
+                )
+
 
             with col2:
                 # --- Validade ---
@@ -569,42 +581,42 @@ def main(conn, cfg, user):
 
             if colA.button("💾 Salvar Alterações"):
                 try:
-                    # Garantir int
-                    nova_qtd_int = int(nova_qtd)
                     qtd_inicial_int = int(qtd_inicial)
+                    qtd_baixar_int = int(qtd_baixar)
 
-                    # Se a nova quantidade for MAIOR ou IGUAL → só atualiza estoque direto
-                    if nova_qtd_int >= qtd_inicial_int:
+                    # Se não houve baixa (só alterou validade/local)
+                    if qtd_baixar_int == 0:
                         cur = conn.cursor()
                         cur.execute(
-                            "UPDATE stock SET qty=%s, location=%s WHERE ean=%s AND lot=%s",
-                            (nova_qtd_int, novo_local, ean_sel, lot_sel),
+                            "UPDATE stock SET location=%s WHERE ean=%s AND lot=%s",
+                            (novo_local, ean_sel, lot_sel),
                         )
                         cur.execute(
                             "UPDATE lots SET expiry_date=%s WHERE ean=%s AND lot=%s",
                             (nova_data.isoformat(), ean_sel, lot_sel),
                         )
                         conn.commit()
-                        st.success("Item atualizado com sucesso!")
+                        st.success("Item atualizado (sem baixa no estoque).")
+                        st.rerun()
                     else:
-                        # Nova quantidade MENOR → precisamos perguntar se foi venda ou só ajuste
-                        delta = qtd_inicial_int - nova_qtd_int  # quanto está saindo do estoque
+                        # Calcula novo saldo após a baixa
+                        nova_qtd_int = max(qtd_inicial_int - qtd_baixar_int, 0)
 
                         st.session_state["ajuste_pendente"] = {
                             "ean": ean_sel,
                             "lot": lot_sel,
                             "qtd_antiga": qtd_inicial_int,
                             "nova_qtd": nova_qtd_int,
-                            "delta": delta,
+                            "delta": qtd_baixar_int,  # quanto está saindo do estoque
                             "nova_data": nova_data,
                             "novo_local": novo_local,
                             "store_id": store_id,
                         }
                         st.session_state["mostrar_modal_ajuste"] = True
-                        st.warning("Confirme abaixo se essa redução de quantidade foi VENDA ou apenas ajuste de estoque.")
-
+                        st.warning("Confirme abaixo se essa baixa foi VENDA ou apenas ajuste de estoque.")
                 except Exception as e:
                     st.error(f"Erro ao preparar alteração: {e}")
+
 
 
             if colB.button("🗑️ Excluir Item do Estoque"):
