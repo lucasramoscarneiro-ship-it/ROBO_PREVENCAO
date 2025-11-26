@@ -20,4 +20,4 @@ streamlit-authenticator>=0.3.2
 requests>=2.32.3
 
 # Banco de dados (Supabase / PostgreSQL)
-psycopg[binary]>=3.1.18
+psycopg2-binary>=2.9.9
